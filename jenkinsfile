@@ -1,0 +1,35 @@
+pipeline {
+    agent none
+    
+    stages {
+        stage('Install Chocolatey on Node 1 (Windows)') {
+            agent { label 'windows_vm' }
+            steps {
+                script {
+                    
+                    powershell '''
+                    Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+                    '''
+                }
+            }
+        }
+        
+        stage('Install Git on Node 1 (Windows)') {
+            agent { label 'windows_vm' }
+            steps {
+                script {
+                   bat '"C:\\ProgramData\\chocolatey\\bin\\choco" install git -y'
+                }
+            }
+        }
+        
+        stage('Install Git on Node 2 (Linux)') {
+            agent { label 'linux_vm' }
+            steps {
+                script {
+                    sh 'sudo apt-get install -y git ' 
+                }
+            }
+        }
+    }
+}
