@@ -1,35 +1,227 @@
 pipeline {
     agent none
-    
+
     stages {
-        stage('Install Chocolatey on Node 1 (Windows)') {
-            agent { label 'windows_vm' }
+        stage('Modify VM Configuration') {
+            agent {
+                label 'local_machine'
+            }
             steps {
                 script {
-                    
-                    powershell '''
-                    Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+                    // Define the path to VirtualBoxManage
+                    def virtualBoxManage = '"C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe"'
+                    // Execute the command to modify memory
+                    bat "${virtualBoxManage} modifyvm vagrant_AnsibleController_1708346081290_14517 --memory 2050"
+                    bat "${virtualBoxManage} modifyvm vagggrant_linux_vm_1709924869873_98798 --memory 2050"
+                    bat "${virtualBoxManage} modifyvm vaggrant_windows_vm_1709905129575_99678 --memory 2050"
+                    // Execute the command to modify CPU
+                    bat "${virtualBoxManage} modifyvm vagrant_AnsibleController_1708346081290_14517 --cpus 4"
+                    bat "${virtualBoxManage} modifyvm vagggrant_linux_vm_1709924869873_98798 --cpus 4"
+                    bat "${virtualBoxManage} modifyvm vaggrant_windows_vm_1709905129575_99678 --cpus 4"
+                }
+            }
+        }
+        stage('Vagrant Up') {
+            agent {
+                label 'local_machine'
+            }
+            steps {
+                script {
+                    // Define the path where your Vagrantfile is located
+                    def vagrantPath = 'C:/vagrant'
+                    catchError(buildResult: 'SUCCESS') {
+                        bat "cd ${vagrantPath} && vagrant up"
+                    }
+                }
+            }
+        }
+        stage('User Input') {
+            agent any
+            steps {
+                script {
+                    def userInput = input message: 'Choose which VM(s) to start:', parameters: [choice(choices: 'Windows\nLinux\nBoth\nnew_vm', description: 'Select VM(s) to start', name: 'VM')]
+                    env.USER_INPUT = userInput
+                }
+            }
+        }
+        stage('Vagrant Up windows') {
+            agent {
+                label 'local_machine'
+            }
+            when {
+                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
+            }
+            steps {
+                script {
+                    // Define the path where your Vagrantfile is located
+                    def vagrantPath = 'C:/vaggrant'
+                    catchError(buildResult: 'SUCCESS') {
+                        bat "cd ${vagrantPath} && vagrant up"
+                    }
+                }
+            }
+        }
+         stage('Vagrant Up linux') {
+            agent {
+                label 'local_machine'
+            }
+            when {
+                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
+            }
+            steps {
+                script {
+                    // Define the path where your Vagrantfile is located
+                    def vagrantPath = 'C:/vagggrant'
+                    catchError(buildResult: 'SUCCESS') {
+                        bat "cd ${vagrantPath} && vagrant up"
+                    }
+                }
+            }
+        }
+        stage('Ansible Deployment windows') {
+            agent {
+                label 'AnsibleController'
+            }
+            when {
+                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
+            }
+            steps {
+                script {
+                    // Define the paths to the playbooks
+                    def linuxPlaybookPath = '/home/vagrant/linuxplaybook.yaml'
+                    def windowsPlaybookPath = '/home/vagrant/windowsplaybook.yaml'
+                    def windows1PlaybookPath = '/home/vagrant/windows1playbook.yaml'
+                    // Define the commands to execute the playbooks with sudo
+                    def linuxPlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${linuxPlaybookPath}"
+                    def windowsPlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${windowsPlaybookPath}"
+                    def windows1PlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${windows1PlaybookPath}"
+                    // Execute the playbook commands
+                    //sh linuxPlaybookCommand
+                    sh windowsPlaybookCommand
+                    sh windows1PlaybookCommand
+                }
+            }
+        }
+        stage('Ansible Deployment linux') {
+            agent {
+                label 'AnsibleController'
+            }
+            when {
+                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
+            }
+            steps {
+                script {
+                    // Define the paths to the playbooks
+                    def linuxPlaybookPath = '/home/vagrant/linuxplaybook.yaml'
+                    def windowsPlaybookPath = '/home/vagrant/windowsplaybook.yaml'
+                    def windows1PlaybookPath = '/home/vagrant/windows1playbook.yaml'
+                    // Define the commands to execute the playbooks with sudo
+                    def linuxPlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${linuxPlaybookPath}"
+                    def windowsPlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${windowsPlaybookPath}"
+                    def windows1PlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${windows1PlaybookPath}"
+                    // Execute the playbook commands
+                    sh linuxPlaybookCommand
+                    //sh windowsPlaybookCommand
+                    //sh windows1PlaybookCommand
+                }
+            }
+        }
+
+        stage('Add Node to Jenkins Linux') {
+            agent {
+                label 'AnsibleController'
+            }
+            when {
+                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
+            }
+            steps {
+                script {
+                    sh '''
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node linux_vm <<EOF
+                    <slave>
+                      <name>linux_vm</name>
+                      <description>linux_vm Automatically added node</description>
+                      <remoteFS>/home/vagrant/agent</remoteFS>
+                      <numExecutors>1</numExecutors>
+                      <mode>NORMAL</mode>
+                      <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
+                      <launcher class="hudson.plugins.sshslaves.SSHLauncher" plugin="ssh-slaves@1.5">
+                        <host>192.168.1.101</host>
+                        <port>22</port>
+                        <credentialsId>97bafce8-56bf-40ea-87d6-3170d2d28014</credentialsId>
+                      </launcher>
+                      <label>linux_vm</label>
+                      <nodeProperties/>
+                      <userId>ramikolsi</userId>
+                    </slave>
+                    EOF
                     '''
                 }
             }
         }
-        
-        stage('Install Git on Node 1 (Windows)') {
-            agent { label 'windows_vm' }
+        stage('Add Node to Jenkins Windows') {
+            agent {
+                label 'AnsibleController'
+            }
+            when {
+                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
+            }
             steps {
                 script {
-                   bat '"C:\\ProgramData\\chocolatey\\bin\\choco" install git -y'
+                    sh '''
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node windows_vm <<EOF
+                    <slave>
+                      <name>windows_vm</name>
+                      <description>windows_vm Automatically added node</description>
+                      <remoteFS>/home/vagrant/agent</remoteFS>
+                      <numExecutors>1</numExecutors>
+                      <mode>NORMAL</mode>
+                      <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
+                      <launcher class="hudson.plugins.sshslaves.SSHLauncher" plugin="ssh-slaves@1.5">
+                        <host>192.168.1.5</host>
+                        <port>22</port>
+                        <credentialsId>97bafce8-56bf-40ea-87d6-3170d2d28014</credentialsId>
+                      </launcher>
+                      <label>windows_vm</label>
+                      <nodeProperties/>
+                      <userId>ramikolsi</userId>
+                    </slave>
+                    EOF
+                    '''
                 }
             }
         }
-        
-        stage('Install Git on Node 2 (Linux)') {
-            agent { label 'linux_vm' }
+        stage('Add Node to Jenkins new_vm') {
+            agent {
+                label 'AnsibleController'
+            }
+            when {
+                expression { env.USER_INPUT == 'new_vm' }
+                }
             steps {
                 script {
-                    sh 'sudo apt-get install -y git ' 
-                }
+                    sh '''
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node new_vm <<EOF
+                    <slave>
+                        <name>new_vm</name>
+                        <description>new_vm Automatically added node</description>
+                        <remoteFS>/home/vagrant/agent</remoteFS>
+                        <numExecutors>1</numExecutors>
+                        <mode>NORMAL</mode>
+                        <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
+                        <launcher class="hudson.plugins.sshslaves.SSHLauncher" plugin="ssh-slaves@1.5">
+                        <host>192.168.1.102</host>
+                        <port>22</port>
+                        <credentialsId>97bafce8-56bf-40ea-87d6-3170d2d28014</credentialsId>
+                        </launcher>
+                        <label>new_vm</label>
+                        <nodeProperties/>
+                        <userId>ramikolsi</userId>
+                    </slave>
+                    EOF
+                    '''
+                }       
             }
-        }
-    }
+        }        
+    }    
 }
