@@ -1,0 +1,64 @@
+- name: Install Chocolatey, Python 3.10, Docker, and Git on Windows VM
+  hosts: windows_vms
+  gather_facts: yes
+  remote_user: vagrant
+  vars:
+    ansible_ssh_pass: vagrant
+    ansible_winrm_transport: basic
+    ansible_winrm_scheme: http
+    ansible_winrm_server_cert_validation: ignore
+    ansible_winrm_operation_timeout_sec: 20
+    ansible_winrm_read_timeout_sec: 30
+    ansible_winrm_retry_delay_sec: 5
+    ansible_winrm_retry_limit: 3
+    ansible_winrm_path: /wsman
+    ansible_winrm_message_encryption: auto
+    ansible_winrm_service_transport: basic
+    ansible_winrm_basic_auth_only: yes
+    ansible_winrm_transport: basic
+    ansible_winrm_port: 5985
+    ansible_winrm_https_port: 5986
+    ansible_connection: winrm
+
+  tasks:
+    - name: Install Chocolatey
+      win_shell: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+      args:
+        chdir: C:\ProgramData\
+
+    - name: Install OpenJDK 11 using Chocolatey
+      win_chocolatey:
+        name: openjdk11
+        state: present
+    - name: Add new path to system PATH
+      win_path:
+        elements:
+          - C:\Program Files\Eclipse Adoptium\jdk-11.0.22.7-hotspot\bin
+    - name: Install Python 3.10 via Chocolatey
+      win_chocolatey:
+        name: python
+        version: '3.10.0'
+        source: https://community.chocolatey.org/api/v2/
+        state: present
+    - name: Install git
+      win_chocolatey:
+        name: git
+        version: '2.43.0'
+        source: https://community.chocolatey.org/api/v2/
+        state: present
+    - name: Install visualstudio2019buildtools
+      win_chocolatey:
+        name: visualstudio2019buildtools
+        version: '16.11.34.0'
+        source: https://community.chocolatey.org/api/v2/
+        state: latest
+    - name: Install docker-cli
+      win_chocolatey:
+        name: docker-cli
+        version: '25.0.3'
+        source: https://community.chocolatey.org/api/v2/
+        state: present
+
+
+
