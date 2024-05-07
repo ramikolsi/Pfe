@@ -2,22 +2,72 @@ pipeline {
     agent none
 
     stages {
-        stage('Modify VM Configuration') {
+         stage('User Input') {
+            agent any
+            steps {
+                script {
+                    def userInput = input message: 'Choose which VM(s) to start:', parameters: [choice(choices: 'Windows\nLinux\nBoth\nnew_vm', description: 'Select VM(s) to start', name: 'VM')]
+                    env.USER_INPUT = userInput
+                }
+            }
+        }
+        stage('Modify Windows_VM Configuration') {
             agent {
                 label 'local_machine'
             }
+            when {
+                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
+            }
             steps {
                 script {
-                    // Define the path to VirtualBoxManage
-                    def virtualBoxManage = '"C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe"'
-                    // Execute the command to modify memory
-                    bat "${virtualBoxManage} modifyvm vagrant_AnsibleController_1708346081290_14517 --memory 2050"
-                    bat "${virtualBoxManage} modifyvm vagggrant_linux_vm_1709924869873_98798 --memory 2050"
-                    bat "${virtualBoxManage} modifyvm vaggrant_windows_vm_1709905129575_99678 --memory 2050"
-                    // Execute the command to modify CPU
-                    bat "${virtualBoxManage} modifyvm vagrant_AnsibleController_1708346081290_14517 --cpus 4"
-                    bat "${virtualBoxManage} modifyvm vagggrant_linux_vm_1709924869873_98798 --cpus 4"
-                    bat "${virtualBoxManage} modifyvm vaggrant_windows_vm_1709905129575_99678 --cpus 4"
+                    // Path to the Vagrantfile
+                    def filePath = 'C:\\vaggrant\\Vagrantfile'
+
+                    // Read the content of the Vagrantfile
+                    def vagrantfileContent = readFile(filePath)
+                    def memoryInput = input message: 'Enter memory value for  VM (MB):', parameters: [string(defaultValue: '2050', description: 'Memory for Windows VM', name: 'MEMORY_WINDOWSS')]
+                    def cpuInput = input message: 'Enter number of CPUs for  VM:', parameters: [string(defaultValue: '4', description: 'Number of CPUs for Windows VM', name: 'CPUS_WINDOWSS')]
+                    // Define the modification
+                    def modification = """
+                    vb.memory = ${memoryInput}
+                    vb.cpus = ${cpuInput}
+                    """
+
+                    // Perform the modification
+                    def newVagrantfileContent = vagrantfileContent.replaceAll(/(windows\.vm\.provider "virtualbox" do \|vb\|)/, "\$1\n\t\t${modification}")
+
+                    // Write back the modified content to the Vagrantfile
+                    writeFile(file: filePath, text: newVagrantfileContent)
+                }
+            }
+        }
+        stage('Modify Linux_VM Configuration') {
+            agent {
+                label 'local_machine'
+            }
+            when {
+                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
+            }
+            steps {
+                script {
+                    // Path to the Vagrantfile
+                    def filePath = 'C:\\vagggrant\\Vagrantfile'
+
+                    // Read the content of the Vagrantfile
+                    def vagrantfileContent = readFile(filePath)
+                    def memoryInput = input message: 'Enter memory value for  VM (MB):', parameters: [string(defaultValue: '2050', description: 'Memory for Linux VM', name: 'MEMORY_LINUX')]
+                    def cpuInput = input message: 'Enter number of CPUs for  VM:', parameters: [string(defaultValue: '4', description: 'Number of CPUs for Linux VM', name: 'CPUS_LINUX')]
+                    // Define the modification
+                    def modification = """
+                    vb.memory = ${memoryInput}
+                    vb.cpus = ${cpuInput}
+                    """
+
+                    // Perform the modification
+                    def newVagrantfileContent = vagrantfileContent.replaceAll(/(linux\.vm\.provider "virtualbox" do \|vb\|)/, "\$1\n\t\t${modification}")
+
+                    // Write back the modified content to the Vagrantfile
+                    writeFile(file: filePath, text: newVagrantfileContent)
                 }
             }
         }
@@ -27,20 +77,14 @@ pipeline {
             }
             steps {
                 script {
+                    def virtualBoxManage = '"C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe"'
+       //             bat "${virtualBoxManage} modifyvm vagrant_AnsibleController_1708346081290_14517 --memory 2050"
+             //       bat "${virtualBoxManage} modifyvm vagrant_AnsibleController_1708346081290_14517 --cpus 4"
                     // Define the path where your Vagrantfile is located
                     def vagrantPath = 'C:/vagrant'
                     catchError(buildResult: 'SUCCESS') {
                         bat "cd ${vagrantPath} && vagrant up"
                     }
-                }
-            }
-        }
-        stage('User Input') {
-            agent any
-            steps {
-                script {
-                    def userInput = input message: 'Choose which VM(s) to start:', parameters: [choice(choices: 'Windows\nLinux\nBoth\nnew_vm', description: 'Select VM(s) to start', name: 'VM')]
-                    env.USER_INPUT = userInput
                 }
             }
         }
@@ -78,6 +122,40 @@ pipeline {
                 }
             }
         }
+        stage('Generate SSH Key') {
+            agent {
+                label 'AnsibleController'
+            }
+            steps{
+                script {
+                    // Use 'yes' command to automatically answer 'yes' to overwrite prompt
+                    sh 'yes y | ssh-keygen -t rsa -f ~/.ssh/id_rsa -N ""'
+                }
+            }
+        }
+        stage('Copy Public Key to Host') {
+            agent {
+                label 'AnsibleController'
+            }
+            steps {
+            script {
+                // Define variables
+                def remoteHost = '192.168.1.119'
+                def remoteUser = 'vagrant'
+                def sshKeyPath = '/home/vagrant/.ssh/id_rsa.pub'
+                def password = 'vagrant' // Provide the password here
+                
+                // Copy SSH key to the first remote host
+                sh "sshpass -p '${password}' ssh-copy-id -i ${sshKeyPath} ${remoteUser}@${remoteHost}"
+                
+                // Define variables for the second remote host
+                def remoteHostt = '192.168.1.101'
+                
+                // Copy SSH key to the second remote host
+                sh "sshpass -p '${password}' ssh-copy-id -i ${sshKeyPath} ${remoteUser}@${remoteHostt}"
+            }
+            }
+        }
         stage('Ansible Deployment windows') {
             agent {
                 label 'AnsibleController'
@@ -87,10 +165,13 @@ pipeline {
             }
             steps {
                 script {
+                    sh "yes | rm -r Pfe"
+                    sh "git clone https://github.com/ramikolsi/Pfe.git"
+                    sh "sudo mv -f Pfe/hosts /etc/ansible"
                     // Define the paths to the playbooks
-                    def linuxPlaybookPath = '/home/vagrant/linuxplaybook.yaml'
-                    def windowsPlaybookPath = '/home/vagrant/windowsplaybook.yaml'
-                    def windows1PlaybookPath = '/home/vagrant/windows1playbook.yaml'
+                    def linuxPlaybookPath = 'Pfe/linuxplaybook.yaml'
+                    def windowsPlaybookPath = 'Pfe/windowsplaybook.yaml'
+                    def windows1PlaybookPath = 'Pfe/windows1playbook.yaml'
                     // Define the commands to execute the playbooks with sudo
                     def linuxPlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${linuxPlaybookPath}"
                     def windowsPlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${windowsPlaybookPath}"
@@ -99,6 +180,8 @@ pipeline {
                     //sh linuxPlaybookCommand
                     sh windowsPlaybookCommand
                     sh windows1PlaybookCommand
+                    sh "yes | rm -r Pfe"
+                    sh "sudo rm /etc/ansible/hosts"
                 }
             }
         }
@@ -111,10 +194,12 @@ pipeline {
             }
             steps {
                 script {
+                    sh "git clone https://github.com/ramikolsi/Pfe.git"
+                    sh "sudo mv -f Pfe/hosts /etc/ansible"
                     // Define the paths to the playbooks
-                    def linuxPlaybookPath = '/home/vagrant/linuxplaybook.yaml'
-                    def windowsPlaybookPath = '/home/vagrant/windowsplaybook.yaml'
-                    def windows1PlaybookPath = '/home/vagrant/windows1playbook.yaml'
+                    def linuxPlaybookPath = 'Pfe/linuxplaybook.yaml'
+                    def windowsPlaybookPath = 'Pfe/windowsplaybook.yaml'
+                    def windows1PlaybookPath = 'Pfe/windows1playbook.yaml'
                     // Define the commands to execute the playbooks with sudo
                     def linuxPlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${linuxPlaybookPath}"
                     def windowsPlaybookCommand = "sudo ansible-playbook -i /etc/ansible/hosts ${windowsPlaybookPath}"
@@ -123,6 +208,8 @@ pipeline {
                     sh linuxPlaybookCommand
                     //sh windowsPlaybookCommand
                     //sh windows1PlaybookCommand
+                    sh "yes | rm -r Pfe"
+                    sh "sudo rm /etc/ansible/hosts"
                 }
             }
         }
@@ -137,7 +224,7 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node linux_vm <<EOF
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.104:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node linux_vm <<EOF
                     <slave>
                       <name>linux_vm</name>
                       <description>linux_vm Automatically added node</description>
@@ -169,7 +256,7 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node windows_vm <<EOF
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.104:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node windows_vm <<EOF
                     <slave>
                       <name>windows_vm</name>
                       <description>windows_vm Automatically added node</description>
@@ -178,7 +265,7 @@ pipeline {
                       <mode>NORMAL</mode>
                       <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
                       <launcher class="hudson.plugins.sshslaves.SSHLauncher" plugin="ssh-slaves@1.5">
-                        <host>192.168.1.5</host>
+                        <host>192.168.1.119</host>
                         <port>22</port>
                         <credentialsId>97bafce8-56bf-40ea-87d6-3170d2d28014</credentialsId>
                       </launcher>
@@ -201,7 +288,7 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node new_vm <<EOF
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.104:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node new_vm <<EOF
                     <slave>
                         <name>new_vm</name>
                         <description>new_vm Automatically added node</description>
@@ -222,6 +309,33 @@ pipeline {
                     '''
                 }       
             }
-        }        
+        }    
+        stage('Install Windows Exporter') {
+            agent { label 'windows_vm' }
+            steps {
+                bat 'curl -o windows_exporter-0.25.1-amd64.msi -LJO https://github.com/prometheus-community/windows_exporter/releases/download/v0.25.1/windows_exporter-0.25.1-amd64.msi'
+                bat 'msiexec /i windows_exporter-0.25.1-amd64.msi'
+                bat 'sc query type= service state= all | findstr /C:"windows_exporter"'
+            }
+        }
+        stage('Install Node Exporter on Linux VM') {
+            agent { label 'linux_vm' }
+            steps {
+                catchError(buildResult: 'SUCCESS') {
+                sh 'wget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz'
+                sh 'tar xvfz node_exporter-1.7.0.linux-amd64.tar.gz'
+                dir('node_exporter-1.7.0.linux-amd64') {
+                        sh 'nohup ./node_exporter  > /dev/null 2>&1 &'
+                }
+                } 
+            }
+        }
+        stage('Run Prometheus Container on Local Machine') {
+            agent { label 'local_machine' }
+            steps {
+                bat 'docker run -d --name prometheus -p 9090:9090 -v C:\\prometheus\\config:/etc/prometheus prom/prometheus'
+                bat 'docker run -d --name newgrafana -p 3000:3000 newgrafana'
+            }
+        }
     }    
 }
