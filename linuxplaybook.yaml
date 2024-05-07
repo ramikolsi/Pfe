@@ -1,0 +1,59 @@
+---
+- name: Install Docker, Python 3.10, JDK 11, and Git on Linux VM
+  hosts: linux_vms
+  remote_user: vagrant
+  become: true
+  become_method: sudo
+  vars:
+    ansible_ssh_pass: vagrant
+
+  tasks:
+    - name: Uninstall old versions
+      apt:
+        name:
+          - docker
+          - docker-engine
+          - docker.io
+          - containerd
+          - runc
+        state: absent
+        autoremove: true
+
+    - name: Update all packages using the apt repository
+      apt:
+        update_cache: yes
+        force_apt_get: yes
+
+    - name: Upgrading all apt packages using apt
+      apt:
+        force_apt_get: yes
+        upgrade: yes
+
+    - name: Install packages including Python 3.10, JDK 11, and Git
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - python3.10
+          - default-jdk  # Installs OpenJDK 11
+          - git
+        state: present
+
+    - name: Add Docker official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Install Docker Engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
