@@ -165,7 +165,6 @@ pipeline {
             }
             steps {
                 script {
-                    sh "yes | rm -r Pfe"
                     sh "git clone https://github.com/ramikolsi/Pfe.git"
                     sh "sudo mv -f Pfe/hosts /etc/ansible"
                     // Define the paths to the playbooks
@@ -223,29 +222,39 @@ pipeline {
             }
             steps {
                 script {
-                    sh '''
-                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.104:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node linux_vm <<EOF
-                    <slave>
-                      <name>linux_vm</name>
-                      <description>linux_vm Automatically added node</description>
-                      <remoteFS>/home/vagrant/agent</remoteFS>
-                      <numExecutors>1</numExecutors>
-                      <mode>NORMAL</mode>
-                      <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
-                      <launcher class="hudson.plugins.sshslaves.SSHLauncher" plugin="ssh-slaves@1.5">
-                        <host>192.168.1.101</host>
-                        <port>22</port>
-                        <credentialsId>97bafce8-56bf-40ea-87d6-3170d2d28014</credentialsId>
-                      </launcher>
-                      <label>linux_vm</label>
-                      <nodeProperties/>
-                      <userId>ramikolsi</userId>
-                    </slave>
-                    EOF
-                    '''
+                    def existingNode = sh(
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
+                        returnStatus: true
+                    )
+                    
+                    if (existingNode != 0) {
+                        sh '''
+                        java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node linux_vm <<EOF
+                        <slave>
+                        <name>linux_vm</name>
+                        <description>linux_vm Automatically added node</description>
+                        <remoteFS>/home/vagrant/agent</remoteFS>
+                        <numExecutors>1</numExecutors>
+                        <mode>NORMAL</mode>
+                        <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
+                        <launcher class="hudson.plugins.sshslaves.SSHLauncher" plugin="ssh-slaves@1.5">
+                            <host>192.168.1.101</host>
+                            <port>22</port>
+                            <credentialsId>97bafce8-56bf-40ea-87d6-3170d2d28014</credentialsId>
+                        </launcher>
+                        <label>linux_vm</label>
+                        <nodeProperties/>
+                        <userId>ramikolsi</userId>
+                        </slave>
+                        EOF
+                        '''
+                    } else {
+                        println("Node 'linux_vm' already exists in Jenkins.")
+                    }
                 }
             }
         }
+
         stage('Add Node to Jenkins Windows') {
             agent {
                 label 'AnsibleController'
@@ -255,8 +264,13 @@ pipeline {
             }
             steps {
                 script {
+                    def existingNode = sh(
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
+                        returnStatus: true
+                    )
+                    if (existingNode != 0) {
                     sh '''
-                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.104:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node windows_vm <<EOF
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node windows_vm <<EOF
                     <slave>
                       <name>windows_vm</name>
                       <description>windows_vm Automatically added node</description>
@@ -275,6 +289,9 @@ pipeline {
                     </slave>
                     EOF
                     '''
+                   }else {
+                        println("Node 'linux_vm' already exists in Jenkins.")
+                    }
                 }
             }
         }
@@ -287,8 +304,13 @@ pipeline {
                 }
             steps {
                 script {
+                    def existingNode = sh(
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
+                        returnStatus: true
+                    )
+                    if (existingNode != 0) {
                     sh '''
-                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.104:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node new_vm <<EOF
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node new_vm <<EOF
                     <slave>
                         <name>new_vm</name>
                         <description>new_vm Automatically added node</description>
@@ -307,6 +329,9 @@ pipeline {
                     </slave>
                     EOF
                     '''
+                    }else {
+                        println("Node 'linux_vm' already exists in Jenkins.")
+                    }
                 }       
             }
         }    
