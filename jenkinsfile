@@ -265,7 +265,7 @@ pipeline {
             steps {
                 script {
                     def existingNode = sh(
-                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node windows_vm",
                         returnStatus: true
                     )
                     if (existingNode != 0) {
@@ -290,7 +290,7 @@ pipeline {
                     EOF
                     '''
                    }else {
-                        println("Node 'linux_vm' already exists in Jenkins.")
+                        println("Node 'windows_vm' already exists in Jenkins.")
                     }
                 }
             }
@@ -305,7 +305,7 @@ pipeline {
             steps {
                 script {
                     def existingNode = sh(
-                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.7:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node new_vm",
                         returnStatus: true
                     )
                     if (existingNode != 0) {
@@ -330,7 +330,7 @@ pipeline {
                     EOF
                     '''
                     }else {
-                        println("Node 'linux_vm' already exists in Jenkins.")
+                        println("Node 'new_vm' already exists in Jenkins.")
                     }
                 }       
             }
