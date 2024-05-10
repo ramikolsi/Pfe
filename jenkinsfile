@@ -2,6 +2,7 @@ pipeline {
     agent none
 
     stages {
+
          stage('User Input') {
             agent any
             steps {
@@ -11,6 +12,17 @@ pipeline {
                 }
             }
         }
+        stage('Clone Repository and Copy Files') {
+            agent {
+                label 'local_machine'
+            }
+            steps {
+                bat 'cd "C:\\Users\\MSI\\OneDrive\\Bureau" && git clone https://github.com/ramikolsi/Pfe.git'
+                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\vagrant_windows" "C:\\vaggrant\\Vagrantfile"'
+                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\linux_vagrant" "C:\\vagggrant\\Vagrantfile"'
+            }
+        }
+
         stage('Modify Windows_VM Configuration') {
             agent {
                 label 'local_machine'
@@ -165,7 +177,6 @@ pipeline {
             }
             steps {
                 script {
-                    sh "yes | rm -r Pfe"
                     sh "git clone https://github.com/ramikolsi/Pfe.git"
                     sh "sudo mv -f Pfe/hosts /etc/ansible"
                     // Define the paths to the playbooks
@@ -266,7 +277,7 @@ pipeline {
             steps {
                 script {
                     def existingNode = sh(
-                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.4:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.4:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node windows_vm",
                         returnStatus: true
                     )
                     if (existingNode != 0) {
@@ -291,7 +302,7 @@ pipeline {
                     EOF
                     '''
                    }else {
-                        println("Node 'linux_vm' already exists in Jenkins.")
+                        println("Node 'windows_vm' already exists in Jenkins.")
                     }
                 }
             }
@@ -348,10 +359,10 @@ pipeline {
             agent { label 'linux_vm' }
             steps {
                 catchError(buildResult: 'SUCCESS') {
-                sh 'wget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz'
-                sh 'tar xvfz node_exporter-1.7.0.linux-amd64.tar.gz'
+                sh 'sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz'
+                sh 'sudo tar xvfz node_exporter-1.7.0.linux-amd64.tar.gz'
                 dir('node_exporter-1.7.0.linux-amd64') {
-                        sh 'nohup ./node_exporter  > /dev/null 2>&1 &'
+                        sh 'sudo nohup ./node_exporter  > /dev/null 2>&1 &'
                 }
                 } 
             }
