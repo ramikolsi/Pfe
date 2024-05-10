@@ -20,6 +20,7 @@ pipeline {
                 bat 'cd "C:\\Users\\MSI\\OneDrive\\Bureau" && git clone https://github.com/ramikolsi/Pfe.git'
                 bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\vagrant_windows" "C:\\vaggrant\\Vagrantfile"'
                 bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\linux_vagrant" "C:\\vagggrant\\Vagrantfile"'
+                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\prometheus.yaml" "C:\\prometheus\\config\\prometheus.yml"'
             }
         }
 
