@@ -393,11 +393,10 @@ pipeline {
             bat 'kubectl apply -f prom-deployment.yaml'
             // bat 'kubectl apply -f prometheus.yaml'
             bat 'kubectl apply -f prom-service.yaml'
-            // Port-forwarding commands
-            bat 'powershell -Command "Start-Process -NoNewWindow -PassThru powershell -ArgumentList {kubectl port-forward grafana-9cf84cdcd-g9jnd 3000:3000}"'
-            bat 'powershell -Command "Start-Process -NoNewWindow -PassThru powershell -ArgumentList {kubectl port-forward prometheus-6549cf67f6-7sjw9 9090:9090}"'        }
     }
 }
 
+
     }    
+}
 }
