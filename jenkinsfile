@@ -101,7 +101,36 @@ pipeline {
                 }
             }
         }
-        stage('Vagrant Up windows') {
+        stage('Rename VMs') {
+            agent {
+                label 'local_machine'  // Ensure this is the correct label for your local machine node
+            }
+            steps {
+                script {
+                    // PowerShell script to rename VMs
+                    def renameVmsScript = '''
+                    $vms = & "C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe" list vms
+                    $pattern = '^"vaggrant_windows_vm_(.+?)"'
+                    foreach ($vm in $vms) {
+                        $vmInfo = $vm -split '\\s+'
+                        $vmName = $vmInfo[0]
+                        if ($vmName -match $pattern) {
+                            & "C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe" modifyvm "$vmName" --name "vagrant_windows_vm"
+                        }
+                    }
+                    '''
+
+                    // Write the PowerShell script to a temporary file
+                    writeFile file: 'renameVms.ps1', text: renameVmsScript
+
+                    // Execute the PowerShell script with administrative privileges
+                    bat '''
+                    powershell -Command "Start-Process PowerShell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"C:\\home\\vagrant\\agent\\workspace\\test\\renameVms.ps1\\"' -Verb RunAs"
+                    '''
+                }
+            }
+        }
+         stage('Vagrant Up windows') {
             agent {
                 label 'local_machine'
             }
@@ -115,6 +144,61 @@ pipeline {
                     catchError(buildResult: 'SUCCESS') {
                         bat "cd ${vagrantPath} && vagrant up"
                     }
+                }
+            }
+        }
+        stage('Configure VM IP Address') {
+            agent {
+                label 'local_machine'  // Ensure this is the correct label for your local machine node
+            }
+            steps {
+                script {
+                    // PowerShell script to configure VM IP address
+                    def configureIpScript = '''
+                    try {
+                        # Get the output of the VBoxManage command to retrieve the VM's IP address
+                        Write-Output "Getting VM IP address..."
+                        $output = & "C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe" guestproperty get "vagrant_windows_vm" "/VirtualBox/GuestInfo/Net/1/V4/IP"
+                        Write-Output "VBoxManage output: $output"
+
+                        # Extract the IPv4 address from the output
+                        $ipAddress = $output -replace '.*Value: (\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}).*', '$1'
+                        Write-Output "Extracted IP address: $ipAddress"
+
+                        # Set the IPv4 address to an environment variable
+                        $env:VM_IP_Address = $ipAddress
+                        Write-Output "Set environment variable VM_IP_Address: $env:VM_IP_Address"
+
+                        # Add the VM's IP address to the TrustedHosts list
+                        Write-Output "Adding IP to TrustedHosts..."
+                        Set-Item WSMan:\\localhost\\Client\\TrustedHosts -Value $env:VM_IP_Address -Concatenate -Force
+                        Write-Output "Added IP to TrustedHosts"
+
+                        # Define the username and password
+                        Write-Output "Setting credentials..."
+                        $username = "vagrant"
+                        $password = ConvertTo-SecureString "vagrant" -AsPlainText -Force
+                        $credential = New-Object System.Management.Automation.PSCredential ($username, $password)
+                        Write-Output "Credentials set"
+
+                        # Execute Invoke-Command with the specified credentials to set the static IPv4 address
+                        Write-Output "Executing Invoke-Command..."
+                        Invoke-Command -ComputerName $env:VM_IP_Address -Credential $credential -ScriptBlock {
+                            netsh interface ipv4 set address name='Ethernet 2' static 192.168.1.7 255.255.255.0 192.168.1.1
+                        }
+                        Write-Output "Invoke-Command executed"
+                    } catch {
+                        Write-Output "Error: $_"
+                    }
+                    '''
+
+                    // Write the PowerShell script to a temporary file
+                    writeFile file: 'configureIp.ps1', text: configureIpScript
+
+                    // Execute the PowerShell script with administrative privileges
+                    bat '''
+                    powershell -Command "Start-Process PowerShell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"C:\\home\\vagrant\\agent\\workspace\\test\\configureIp.ps1\\"' -Verb RunAs"
+                    '''
                 }
             }
         }
@@ -236,13 +320,13 @@ pipeline {
             steps {
                 script {
                     def existingNode = sh(
-                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.6:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
                         returnStatus: true
                     )
                     
                     if (existingNode != 0) {
                         sh '''
-                        java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node linux_vm <<EOF
+                        java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.6:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node linux_vm <<EOF
                         <slave>
                         <name>linux_vm</name>
                         <description>linux_vm Automatically added node</description>
@@ -278,12 +362,12 @@ pipeline {
             steps {
                 script {
                     def existingNode = sh(
-                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node windows_vm",
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.6:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node windows_vm",
                         returnStatus: true
                     )
                     if (existingNode != 0) {
                     sh '''
-                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node windows_vm <<EOF
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.6:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node windows_vm <<EOF
                     <slave>
                       <name>windows_vm</name>
                       <description>windows_vm Automatically added node</description>
@@ -318,12 +402,12 @@ pipeline {
             steps {
                 script {
                     def existingNode = sh(
-                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
+                        script: "java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.6:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 get-node linux_vm",
                         returnStatus: true
                     )
                     if (existingNode != 0) {
                     sh '''
-                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.3:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node new_vm <<EOF
+                    java -jar /home/vagrant/jenkins-cli.jar -s http://192.168.1.6:8080/ -auth ramikolsi:11c0b02c3d6013047e1686b7d75729a871 create-node new_vm <<EOF
                     <slave>
                         <name>new_vm</name>
                         <description>new_vm Automatically added node</description>
@@ -393,6 +477,11 @@ pipeline {
             bat 'kubectl apply -f prom-deployment.yaml'
             // bat 'kubectl apply -f prometheus.yaml'
             bat 'kubectl apply -f prom-service.yaml'
+            bat 'start /B kubectl port-forward grafana-9cf84cdcd-fd69v 3000:3000'
+
+            // Execute port-forwarding command for Prometheus in PowerShell
+            powershell 'Start-Process -NoNewWindow kubectl -ArgumentList "port-forward prometheus-6549cf67f6-ccpkz 9090:9090"'
+            
     }
 }
 
