@@ -101,7 +101,7 @@ pipeline {
                 }
             }
         }
-        stage('Rename VMs') {
+                stage('Rename VMs') {
             agent {
                 label 'local_machine'  // Ensure this is the correct label for your local machine node
             }
@@ -147,16 +147,15 @@ pipeline {
                 }
             }
         }
-        stage('Configure VM IP Address') {
+  stage('Configure VM IP Address') {
             agent {
-                label 'local_machine'  // Ensure this is the correct label for your local machine node
+                label 'local_machine'
             }
             steps {
                 script {
                     // PowerShell script to configure VM IP address
                     def configureIpScript = '''
                     try {
-                        # Get the output of the VBoxManage command to retrieve the VM's IP address
                         Write-Output "Getting VM IP address..."
                         $output = & "C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe" guestproperty get "vagrant_windows_vm" "/VirtualBox/GuestInfo/Net/1/V4/IP"
                         Write-Output "VBoxManage output: $output"
@@ -181,28 +180,58 @@ pipeline {
                         $credential = New-Object System.Management.Automation.PSCredential ($username, $password)
                         Write-Output "Credentials set"
 
+                        # Test connectivity before invoking the command
+                        $maxRetries = 5
+                        $retryCount = 0
+                        $connected = $false
+
+                        while (-not $connected -and $retryCount -lt $maxRetries) {
+                            Write-Output "Testing connectivity, attempt $($retryCount + 1)..."
+                            $connected = Test-Connection -ComputerName $env:VM_IP_Address -Count 2 -Quiet
+                            Write-Output "Test-Connection result: $connected"
+                            if ($connected) {
+                                Write-Output "Connectivity test passed"
+                            } else {
+                                Write-Output "Connectivity test failed, retrying in 30 seconds..."
+                                Start-Sleep -Seconds 30
+                                $retryCount++
+                            }
+                        }
+
+                        if (-not $connected) {
+                            throw "Unable to reach VM at $env:VM_IP_Address after $maxRetries attempts"
+                        }
+
                         # Execute Invoke-Command with the specified credentials to set the static IPv4 address
                         Write-Output "Executing Invoke-Command..."
                         Invoke-Command -ComputerName $env:VM_IP_Address -Credential $credential -ScriptBlock {
                             netsh interface ipv4 set address name='Ethernet 2' static 192.168.1.7 255.255.255.0 192.168.1.1
                         }
-                        Write-Output "Invoke-Command executed"
+                        Write-Output "Invoke-Command executed successfully"
+
+                        Write-Output "Sleeping for 2 minutes to allow command to complete..."
+                        Start-Sleep -Seconds 120  # Sleep for 2 minutes to allow command to complete
+
+                        $newIpAddress = "192.168.1.7"
+                        Write-Output "Testing connectivity to new IP address..."
+                        if (Test-Connection -ComputerName $newIpAddress -Count 2 -Quiet) {
+                            Write-Output "Connectivity to new IP address $newIpAddress passed"
+                        } else {
+                            throw "Unable to reach VM at $newIpAddress"
+                        }
                     } catch {
                         Write-Output "Error: $_"
+                        exit 1
                     }
                     '''
-
-                    // Write the PowerShell script to a temporary file
                     writeFile file: 'configureIp.ps1', text: configureIpScript
-
-                    // Execute the PowerShell script with administrative privileges
                     bat '''
-                    powershell -Command "Start-Process PowerShell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"C:\\home\\vagrant\\agent\\workspace\\test\\configureIp.ps1\\"' -Verb RunAs"
+                    powershell -NoProfile -ExecutionPolicy Bypass -File "C:\\home\\vagrant\\agent\\workspace\\test\\configureIp.ps1"
                     '''
                 }
             }
-        }
-         stage('Vagrant Up linux') {
+        }     
+        stage('Vagrant Up linux') {
             agent {
                 label 'local_machine'
             }
@@ -262,6 +291,7 @@ pipeline {
             }
             steps {
                 script {
+                    sh "yes | rm -r Pfe"
                     sh "git clone https://github.com/ramikolsi/Pfe.git"
                     sh "sudo mv -f Pfe/hosts /etc/ansible"
                     // Define the paths to the playbooks
