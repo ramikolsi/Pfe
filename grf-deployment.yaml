@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: grafana
-        image: ramikolsi/newgrafana:latest
+        image: ramikolsi/newgrafanaa:latesttt
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
