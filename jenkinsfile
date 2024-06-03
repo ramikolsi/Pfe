@@ -101,9 +101,12 @@ pipeline {
                 }
             }
         }
-                stage('Rename VMs') {
+        stage('Rename VMs') {
             agent {
                 label 'local_machine'  // Ensure this is the correct label for your local machine node
+            }
+             when {
+                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
             }
             steps {
                 script {
@@ -123,6 +126,13 @@ pipeline {
                     // Write the PowerShell script to a temporary file
                     writeFile file: 'renameVms.ps1', text: renameVmsScript
 
+                    def vagrantPath = 'C:/vaggrant'
+                    catchError(buildResult: 'SUCCESS') {
+                        bat "cd ${vagrantPath} && vagrant up"
+                    }
+                     catchError(buildResult: 'SUCCESS') {
+                         bat "cd ${vagrantPath} && vagrant suspend"
+                     }
                     // Execute the PowerShell script with administrative privileges
                     bat '''
                     powershell -Command "Start-Process PowerShell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \\"C:\\home\\vagrant\\agent\\workspace\\test\\renameVms.ps1\\"' -Verb RunAs"
@@ -150,6 +160,9 @@ pipeline {
   stage('Configure VM IP Address') {
             agent {
                 label 'local_machine'
+            }
+            when {
+                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
             }
             steps {
                 script {
@@ -259,9 +272,12 @@ pipeline {
                 }
             }
         }
-        stage('Copy Public Key to Hosts') {
+        stage('Copy Public Key to windows Host') {
             agent {
                 label 'AnsibleController'
+            }
+             when {
+                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
             }
             steps {
                 script {
@@ -273,6 +289,32 @@ pipeline {
 
                     // Copy SSH key to the first remote host
                     sh "sshpass -p '${password}' ssh-copy-id -o StrictHostKeyChecking=no -i ${sshKeyPath} ${remoteUser}@${remoteHost1}"
+
+                    // Define variables for the second remote host
+                    def remoteHost2 = '192.168.1.101'
+
+                    // Copy SSH key to the second remote host
+                    //sh "sshpass -p '${password}' ssh-copy-id -o StrictHostKeyChecking=no -i ${sshKeyPath} ${remoteUser}@${remoteHost2}"
+                }
+            }
+        }
+        stage('Copy Public Key to linux Host') {
+            agent {
+                label 'AnsibleController'
+            }
+            when {
+                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
+            }
+            steps {
+                script {
+                    // Define variables
+                    def remoteHost1 = '192.168.1.7'
+                    def remoteUser = 'vagrant'
+                    def sshKeyPath = '/home/vagrant/.ssh/id_rsa.pub'
+                    def password = 'vagrant' // Provide the password here
+
+                    // Copy SSH key to the first remote host
+                    //sh "sshpass -p '${password}' ssh-copy-id -o StrictHostKeyChecking=no -i ${sshKeyPath} ${remoteUser}@${remoteHost1}"
 
                     // Define variables for the second remote host
                     def remoteHost2 = '192.168.1.101'
@@ -464,6 +506,9 @@ pipeline {
         }    
         stage('Install Windows Exporter') {
             agent { label 'windows_vm' }
+                        when {
+                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
+            }
             steps {
                 bat 'curl -o windows_exporter-0.25.1-amd64.msi -LJO https://github.com/prometheus-community/windows_exporter/releases/download/v0.25.1/windows_exporter-0.25.1-amd64.msi'
                 bat 'msiexec /i windows_exporter-0.25.1-amd64.msi'
@@ -493,6 +538,9 @@ pipeline {
     agent {
         label 'local_machine'
     }
+                when {
+                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
+            }
     steps { 
         // Change working directory to C:\minikube
         dir("C:\\minikube") {
