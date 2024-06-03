@@ -2,7 +2,27 @@ pipeline {
     agent none
 
     stages {
+        stage('Clone Repository and Copy Files') {
+            agent {
+                label 'local_machine'
+            }
+            steps {
+                script {
+                    def repoDir = 'C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe'
+                    def gitCloneCommand = 'cd "C:\\Users\\MSI\\OneDrive\\Bureau" && git clone https://github.com/ramikolsi/Pfe.git'
 
+                    // Check if the directory exists using PowerShell and set dirExists accordingly
+                    def dirExists = bat(script: "powershell -Command \"if (Test-Path -Path '${repoDir}') { exit 0 } else { exit 1 }\"", returnStatus: true) == 0
+
+                    if (!dirExists) {
+                        bat gitCloneCommand
+                    }
+                }
+                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\vagrant_windows" "C:\\vaggrant\\Vagrantfile"'
+                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\linux_vagrant" "C:\\vagggrant\\Vagrantfile"'
+                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\prometheus.yml" "C:\\prometheus\\config\\prometheus.yml"'
+            }
+        }
          stage('User Input') {
             agent any
             steps {
@@ -12,18 +32,6 @@ pipeline {
                 }
             }
         }
-        stage('Clone Repository and Copy Files') {
-            agent {
-                label 'local_machine'
-            }
-            steps {
-                bat 'cd "C:\\Users\\MSI\\OneDrive\\Bureau" && git clone https://github.com/ramikolsi/Pfe.git'
-                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\vagrant_windows" "C:\\vaggrant\\Vagrantfile"'
-                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\linux_vagrant" "C:\\vagggrant\\Vagrantfile"'
-                bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\prometheus.yml" "C:\\prometheus\\config\\prometheus.yml"'
-            }
-        }
-
         stage('Modify Windows_VM Configuration') {
             agent {
                 label 'local_machine'
@@ -91,9 +99,6 @@ pipeline {
             steps {
                 script {
                     def virtualBoxManage = '"C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe"'
-       //             bat "${virtualBoxManage} modifyvm vagrant_AnsibleController_1708346081290_14517 --memory 2050"
-             //       bat "${virtualBoxManage} modifyvm vagrant_AnsibleController_1708346081290_14517 --cpus 4"
-                    // Define the path where your Vagrantfile is located
                     def vagrantPath = 'C:/vagrant'
                     catchError(buildResult: 'SUCCESS') {
                         bat "cd ${vagrantPath} && vagrant up"
@@ -333,7 +338,6 @@ pipeline {
             }
             steps {
                 script {
-                    sh "yes | rm -r Pfe"
                     sh "git clone https://github.com/ramikolsi/Pfe.git"
                     sh "sudo mv -f Pfe/hosts /etc/ansible"
                     // Define the paths to the playbooks
@@ -527,13 +531,6 @@ pipeline {
                 } 
             }
         }
-        //stage('Run Prometheus Container on Local Machine') {
-          //  agent { label 'local_machine' }
-        //    steps {
-          //      bat 'docker run -d --name prometheus -p 9090:9090 -v C:\\prometheus\\config:/etc/prometheus prom/prometheus'
-            //    bat 'docker run -d --name newgrafana -p 3000:3000 newgrafana'
-          //  }
-        //}
         stage('launch a minikube cluster') {
     agent {
         label 'local_machine'
@@ -562,8 +559,6 @@ pipeline {
             
     }
 }
-
-
     }    
 }
 }
