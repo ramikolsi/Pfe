@@ -23,75 +23,63 @@ pipeline {
                 bat 'copy /Y "C:\\Users\\MSI\\OneDrive\\Bureau\\Pfe\\prometheus.yml" "C:\\prometheus\\config\\prometheus.yml"'
             }
         }
-         stage('User Input') {
-            agent any
-            steps {
-                script {
-                    def userInput = input message: 'Choose which VM(s) to start:', parameters: [choice(choices: 'Windows\nLinux\nBoth\nnew_vm', description: 'Select VM(s) to start', name: 'VM')]
-                    env.USER_INPUT = userInput
-                }
+        stage('User Input and Modify VM Configuration') {
+    agent {
+        label 'local_machine'
+    }
+    steps {
+        script {
+            // User Input
+            def userInput = input message: 'Choose which VM(s) to start:', parameters: [choice(choices: 'Windows\nLinux\nBoth\nnew_vm', description: 'Select VM(s) to start', name: 'VM')]
+            env.USER_INPUT = userInput
+
+            // Modify Windows_VM Configuration
+            if (env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both') {
+                // Path to the Vagrantfile
+                def windowsFilePath = 'C:\\vaggrant\\Vagrantfile'
+
+                // Read the content of the Vagrantfile
+                def vagrantfileContent = readFile(windowsFilePath)
+                def memoryInput = input message: 'Enter memory value for Windows VM (MB):', parameters: [string(defaultValue: '2050', description: 'Memory for Windows VM', name: 'MEMORY_WINDOWSS')]
+                def cpuInput = input message: 'Enter number of CPUs for Windows VM:', parameters: [string(defaultValue: '4', description: 'Number of CPUs for Windows VM', name: 'CPUS_WINDOWSS')]
+                // Define the modification
+                def modification = """
+                vb.memory = ${memoryInput}
+                vb.cpus = ${cpuInput}
+                """
+
+                // Perform the modification
+                def newVagrantfileContent = vagrantfileContent.replaceAll(/(windows\.vm\.provider "virtualbox" do \|vb\|)/, "\$1\n\t\t${modification}")
+
+                // Write back the modified content to the Vagrantfile
+                writeFile(file: windowsFilePath, text: newVagrantfileContent)
+            }
+
+            // Modify Linux_VM Configuration
+            if (env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both') {
+                // Path to the Vagrantfile
+                def linuxFilePath = 'C:\\vagggrant\\Vagrantfile'
+
+                // Read the content of the Vagrantfile
+                def vagrantfileContent = readFile(linuxFilePath)
+                def memoryInput = input message: 'Enter memory value for Linux VM (MB):', parameters: [string(defaultValue: '2050', description: 'Memory for Linux VM', name: 'MEMORY_LINUX')]
+                def cpuInput = input message: 'Enter number of CPUs for Linux VM:', parameters: [string(defaultValue: '4', description: 'Number of CPUs for Linux VM', name: 'CPUS_LINUX')]
+                // Define the modification
+                def modification = """
+                vb.memory = ${memoryInput}
+                vb.cpus = ${cpuInput}
+                """
+
+                // Perform the modification
+                def newVagrantfileContent = vagrantfileContent.replaceAll(/(linux\.vm\.provider "virtualbox" do \|vb\|)/, "\$1\n\t\t${modification}")
+
+                // Write back the modified content to the Vagrantfile
+                writeFile(file: linuxFilePath, text: newVagrantfileContent)
             }
         }
-        stage('Modify Windows_VM Configuration') {
-            agent {
-                label 'local_machine'
-            }
-            when {
-                expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
-            }
-            steps {
-                script {
-                    // Path to the Vagrantfile
-                    def filePath = 'C:\\vaggrant\\Vagrantfile'
+    }
+}
 
-                    // Read the content of the Vagrantfile
-                    def vagrantfileContent = readFile(filePath)
-                    def memoryInput = input message: 'Enter memory value for  VM (MB):', parameters: [string(defaultValue: '2050', description: 'Memory for Windows VM', name: 'MEMORY_WINDOWSS')]
-                    def cpuInput = input message: 'Enter number of CPUs for  VM:', parameters: [string(defaultValue: '4', description: 'Number of CPUs for Windows VM', name: 'CPUS_WINDOWSS')]
-                    // Define the modification
-                    def modification = """
-                    vb.memory = ${memoryInput}
-                    vb.cpus = ${cpuInput}
-                    """
-
-                    // Perform the modification
-                    def newVagrantfileContent = vagrantfileContent.replaceAll(/(windows\.vm\.provider "virtualbox" do \|vb\|)/, "\$1\n\t\t${modification}")
-
-                    // Write back the modified content to the Vagrantfile
-                    writeFile(file: filePath, text: newVagrantfileContent)
-                }
-            }
-        }
-        stage('Modify Linux_VM Configuration') {
-            agent {
-                label 'local_machine'
-            }
-            when {
-                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
-            }
-            steps {
-                script {
-                    // Path to the Vagrantfile
-                    def filePath = 'C:\\vagggrant\\Vagrantfile'
-
-                    // Read the content of the Vagrantfile
-                    def vagrantfileContent = readFile(filePath)
-                    def memoryInput = input message: 'Enter memory value for  VM (MB):', parameters: [string(defaultValue: '2050', description: 'Memory for Linux VM', name: 'MEMORY_LINUX')]
-                    def cpuInput = input message: 'Enter number of CPUs for  VM:', parameters: [string(defaultValue: '4', description: 'Number of CPUs for Linux VM', name: 'CPUS_LINUX')]
-                    // Define the modification
-                    def modification = """
-                    vb.memory = ${memoryInput}
-                    vb.cpus = ${cpuInput}
-                    """
-
-                    // Perform the modification
-                    def newVagrantfileContent = vagrantfileContent.replaceAll(/(linux\.vm\.provider "virtualbox" do \|vb\|)/, "\$1\n\t\t${modification}")
-
-                    // Write back the modified content to the Vagrantfile
-                    writeFile(file: filePath, text: newVagrantfileContent)
-                }
-            }
-        }
         stage('Vagrant Up') {
             agent {
                 label 'local_machine'
@@ -510,7 +498,7 @@ pipeline {
         }    
         stage('Install Windows Exporter') {
             agent { label 'windows_vm' }
-                        when {
+            when {
                 expression { env.USER_INPUT == 'Windows' || env.USER_INPUT == 'Both' }
             }
             steps {
@@ -521,6 +509,9 @@ pipeline {
         }
         stage('Install Node Exporter on Linux VM') {
             agent { label 'linux_vm' }
+            when {
+                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
+            }
             steps {
                 catchError(buildResult: 'SUCCESS') {
                 sh 'sudo wget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz'
@@ -535,9 +526,7 @@ pipeline {
     agent {
         label 'local_machine'
     }
-                when {
-                expression { env.USER_INPUT == 'Linux' || env.USER_INPUT == 'Both' }
-            }
+
     steps { 
         // Change working directory to C:\minikube
         dir("C:\\minikube") {
