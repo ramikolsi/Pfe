@@ -12,9 +12,26 @@ spec:
       labels:
         app: grafana
     spec:
+      securityContext:
+        fsGroup: 0
       containers:
       - name: grafana
         image: ramikolsi/newgrafanaa:latesttt
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+              - SYS_ADMIN
+        volumeMounts:
+        - name: grafana-config-volume
+          mountPath: /etc/grafana/grafana.ini
+          subPath: grafana.ini
+      volumes:
+      - name: grafana-config-volume
+        configMap:
+          name: grafana-config
